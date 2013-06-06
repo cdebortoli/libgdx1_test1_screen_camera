@@ -10,6 +10,7 @@ import com.badlogic.gdx.graphics.g2d.TextureAtlas;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer.ShapeType;
+import com.badlogic.gdx.math.Vector3;
 import com.me.test1screen.test1Screen;
 
 public class gameScreen extends abstractScreen {
@@ -23,23 +24,34 @@ public class gameScreen extends abstractScreen {
     static final int VIEWPORT_WIDTH_UNITS  = 10;
     static final int VIEWPORT_HEIGHT_UNITS = 10;
 
-    static final int RECT_WIDTH_UNITS  = 2000;
-    static final int RECT_HEIGHT_UNITS = 2000;
+    static final int RECT_WIDTH_UNITS  = 3500;
+    static final int RECT_HEIGHT_UNITS = 3500;
+    
+    static final int CACHE_GROUP_REF = 25;
     
     // Used for images
     private TextureRegion[] squareTextures = new TextureRegion[5];
+    private TextureRegion oneTexture = new TextureRegion();
     private SpriteBatch spriteBatch;
     private SpriteCache spriteCache;
     private int _spriteCacheIndex;  
+    private int[][] _spriteCachIndexArray;
     private int[][] colorIndexArray;
     
     public gameScreen(test1Screen game) {
 		super(game);
 		
+		// Init
         spriteBatch = new SpriteBatch();
-        spriteCache = new SpriteCache(RECT_WIDTH_UNITS*RECT_HEIGHT_UNITS, false);
+
+		// Load images
+        TextureAtlas atlas = new TextureAtlas(Gdx.files.internal("data/textures/textures.pack"));
+        for (int i = 1; i <= 5; i++) {
+			squareTextures[i-1] = atlas.findRegion("square"+String.valueOf(i));
+		}
+        oneTexture = squareTextures[0];
         
-        // Create the random quadrillage
+        // Create the random grid of color images
         colorIndexArray = new int[RECT_WIDTH_UNITS][RECT_HEIGHT_UNITS];
 		int i_color = 0;
         for (int i = -RECT_WIDTH_UNITS/2; i < RECT_WIDTH_UNITS/2; i++) {
@@ -51,13 +63,18 @@ public class gameScreen extends abstractScreen {
         	}
         	i_color++;
 		}
-		
-		// Load images
-        TextureAtlas atlas = new TextureAtlas(Gdx.files.internal("data/textures/textures.pack"));
-        for (int i = 1; i <= 5; i++) {
-			squareTextures[i-1] = atlas.findRegion("square"+String.valueOf(i));
-		}
         
+        // Cache
+        spriteCache = new SpriteCache(RECT_WIDTH_UNITS*RECT_HEIGHT_UNITS, false);
+        _spriteCachIndexArray = new int[RECT_WIDTH_UNITS][RECT_HEIGHT_UNITS];
+        //create_one_cache();
+        //create_multiple_cache();
+		
+
+	}
+    
+    private void create_one_cache()
+    {
         // Create the sprite cache
         spriteCache.beginCache();
 		int sprite_i_color = 0;
@@ -70,7 +87,44 @@ public class gameScreen extends abstractScreen {
 			sprite_i_color++;
 		}
 		_spriteCacheIndex = spriteCache.endCache();
-	}
+		
+    }
+    
+    private void create_multiple_cache()
+    {
+		int group_by_cache_x 	= CACHE_GROUP_REF; // if 2500 columns, 2500/125 = 20 by lines
+		int group_by_cache_y 	= CACHE_GROUP_REF; // if 2500 rows, 2500/125 = 20 by lines (20*20 = 400 sprite by cache) (125*125 = 15625 caches)
+		int sprite_by_cache_x 	=  RECT_WIDTH_UNITS / group_by_cache_x;	// 2500 / 125 = 20
+		int sprite_by_cache_y 	=  RECT_HEIGHT_UNITS / group_by_cache_y;
+
+		for (int index_cache_x = 0; index_cache_x < group_by_cache_x; index_cache_x++) 
+		{
+			
+			// Bound X
+			int first_sprite_x = (index_cache_x * sprite_by_cache_x) + (-RECT_WIDTH_UNITS/2);
+			int last_sprite_x  = first_sprite_x + sprite_by_cache_x;
+			for (int index_cache_y = 0; index_cache_y < group_by_cache_y; index_cache_y++) 
+			{
+				spriteCache.beginCache();
+				
+				// Bound Y
+				int first_sprite_y = (index_cache_y * sprite_by_cache_y) + (-RECT_HEIGHT_UNITS/2);
+				int last_sprite_y  = first_sprite_y + sprite_by_cache_y;
+				
+				for (int i = first_sprite_x; i < last_sprite_x; i++) 
+				{
+					for (int j = first_sprite_y; j < last_sprite_y; j++) 
+					{
+						spriteCache.add(squareTextures[colorIndexArray[i - (-RECT_WIDTH_UNITS/2)][j - (-RECT_HEIGHT_UNITS/2)]], i, j, 1, 1);
+					}
+				}
+
+				Gdx.app.log("CACHE CREATED", String.valueOf(index_cache_x) +"-"+ String.valueOf(index_cache_y));
+				_spriteCachIndexArray[index_cache_x][index_cache_y] = spriteCache.endCache();
+				
+			}
+		}
+    }
     
 	@Override
 	public void render(float delta) {
@@ -86,26 +140,94 @@ public class gameScreen extends abstractScreen {
 		spriteBatch.setProjectionMatrix(cam.combined);
 	    spriteCache.setProjectionMatrix(cam.combined);
 		
-		// Sprite batch
-//		spriteBatch.begin();
-//			int i_color = 0;
-//			for (int i = -RECT_WIDTH_UNITS/2; i < RECT_WIDTH_UNITS/2; i++) {
-//				int j_color = 0;
-//				for (int j = -RECT_HEIGHT_UNITS/2; j < RECT_HEIGHT_UNITS/2; j++) {
-//					spriteBatch.draw(squareTextures[colorIndexArray[i_color][j_color]], i, j, 1, 1);
-//					j_color++;
-//				}
-//				i_color++;
-//			}
-//		
-//		spriteBatch.end();
+		/*
+		 *  Sprite batch (too loud)
+		 */
+	    //spriteBatchExec();
 		
-		// Sprite cache;    
+		/*
+		 *  Sprite cache (a little better, but still too loud)
+		 */
+	    //spriteCacheExec();
+		
+	    /*
+	     * Sprite multie cache (better, but still too loud and very slow to create)
+	     */
+	    //spriteCacheSpecificExec();
+	    
+		/*
+		 * Sprite Batch selected with frustum (too loud)
+		 */
+	    //spriteBatchSelectedWithFrustum();
+	    
+	    /*
+	     * SpriteBatch Selected (camera zoom limit, but best solution)
+	     */
+	    spriteBatchSelectedExec();
+	    
+        /*
+         * DEBUG RENDERER
+         */
+	    //debugRendererExec();
+
+		cam.update();
+		
+	}
+
+	private void spriteCacheExec()
+	{
         spriteCache.begin();  
         spriteCache.draw(_spriteCacheIndex);  
         spriteCache.end();  
+	}
+	
+	private void spriteCacheSpecificExec()
+	{
+        spriteCache.begin();  
+		
+		// Camera view bounds
+		int sprite_margin = 4;
+
+		float cam_min_x = cam.position.x - ((cam.viewportWidth * cam.zoom) / 2) - sprite_margin;
+		float cam_max_x = cam.position.x + ((cam.viewportWidth * cam.zoom) / 2) + sprite_margin;
+
+		float cam_min_y = cam.position.y - ((cam.viewportHeight * cam.zoom) / 2) - sprite_margin;
+		float cam_max_y = cam.position.y + ((cam.viewportHeight * cam.zoom) / 2) + sprite_margin;
 		
 		
+		// Cache analysis
+		int group_by_cache_x 	= CACHE_GROUP_REF; // if 2500 columns, 2500/125 = 20 by lines
+		int group_by_cache_y 	= CACHE_GROUP_REF; // if 2500 rows, 2500/125 = 20 by lines (20*20 = 400 sprite by cache) (125*125 = 15625 caches)
+		int sprite_by_cache_x 	=  RECT_WIDTH_UNITS / group_by_cache_x;	// 2500 / 125 = 20
+		int sprite_by_cache_y 	=  RECT_HEIGHT_UNITS / group_by_cache_y;
+
+		for (int index_cache_x = 0; index_cache_x < group_by_cache_x; index_cache_x++) 
+		{
+			
+			// Bound X
+			int first_sprite_x = (index_cache_x * sprite_by_cache_x) + (-RECT_WIDTH_UNITS/2);
+			int last_sprite_x  = first_sprite_x + sprite_by_cache_x;
+			for (int index_cache_y = 0; index_cache_y < group_by_cache_y; index_cache_y++) 
+			{
+				// Bound Y
+				int first_sprite_y = (index_cache_y * sprite_by_cache_y) + (-RECT_HEIGHT_UNITS/2);
+				int last_sprite_y  = first_sprite_y + sprite_by_cache_y;
+				
+				if ((first_sprite_x >= cam_min_x && first_sprite_x <= cam_max_x) ||
+					(last_sprite_x >= cam_min_x && last_sprite_x <= cam_max_x) ||
+					(first_sprite_y >= cam_min_y && first_sprite_y <= cam_max_y) ||
+					(last_sprite_y >= cam_min_y && last_sprite_y <= cam_max_y))
+				{
+					spriteCache.draw(_spriteCachIndexArray[index_cache_x][index_cache_y]);
+				}
+			}
+		}
+        spriteCache.end();  
+
+	}
+	
+	private void debugRendererExec()
+	{
 		// Draw big square
 		debugRenderer.begin(ShapeType.Rectangle);
 		debugRenderer.rect( -RECT_WIDTH_UNITS/2, -RECT_HEIGHT_UNITS/2, RECT_WIDTH_UNITS, RECT_HEIGHT_UNITS);
@@ -113,18 +235,85 @@ public class gameScreen extends abstractScreen {
 		// Draw quadrillage
 		for (int i = -RECT_WIDTH_UNITS/2; i < RECT_WIDTH_UNITS/2; i++) {
 			for (int j = -RECT_HEIGHT_UNITS/2; j < RECT_HEIGHT_UNITS/2; j++) {
-				//debugRenderer.rect(i,j,1,1);
+				debugRenderer.rect(i,j,1,1);
 			}
 		}
 		debugRenderer.end();
-		
-		
-		
-		cam.update();
-		//cam.apply(Gdx.gl10);
-		
 	}
+	
+	private void spriteBatchExec()
+	{
+		spriteBatch.begin();
+		int i_color = 0;
+		for (int i = -RECT_WIDTH_UNITS/2; i < RECT_WIDTH_UNITS/2; i++) {
+			int j_color = 0;
+			for (int j = -RECT_HEIGHT_UNITS/2; j < RECT_HEIGHT_UNITS/2; j++) {
+				spriteBatch.draw(squareTextures[colorIndexArray[i_color][j_color]], i, j, 1, 1);
+				j_color++;
+			}
+			i_color++;
+		}
+	
+		spriteBatch.end();
+	}
+	
+	private void spriteBatchSelectedExec()
+	{
+		int sprite_margin = 4;
+		
+		spriteBatch.begin();
+		int i_color = 0;
+		int test = 0;
+		for (int i = -RECT_WIDTH_UNITS/2; i < RECT_WIDTH_UNITS/2; i++) {
+			int j_color = 0;
+			for (int j = -RECT_HEIGHT_UNITS/2; j < RECT_HEIGHT_UNITS/2; j++) {
+				
+				float min_x = cam.position.x - ((cam.viewportWidth * cam.zoom) / 2) - sprite_margin;
+				float max_x = cam.position.x + ((cam.viewportWidth * cam.zoom) / 2) + sprite_margin;
 
+				float min_y = cam.position.y - ((cam.viewportHeight * cam.zoom) / 2) - sprite_margin;
+				float max_y = cam.position.y + ((cam.viewportHeight * cam.zoom) / 2) + sprite_margin;
+				
+				if ((i >= min_x && i <= max_x) && (j >= min_y && j <= max_y)) 
+				{
+					spriteBatch.draw(squareTextures[colorIndexArray[i_color][j_color]], i, j, 1, 1);
+					test++;
+				}
+				j_color++;
+			}
+			i_color++;
+		}
+		//Gdx.app.log("Total sprite drawed", String.valueOf(test));
+
+		spriteBatch.end();	
+
+	
+	}
+	
+	private void spriteBatchSelectedWithFrustum()
+	{
+		spriteBatch.begin();
+		int i_color = 0;
+		int test = 0;
+		for (int i = -RECT_WIDTH_UNITS/2; i < RECT_WIDTH_UNITS/2; i++) {
+			int j_color = 0;
+			for (int j = -RECT_HEIGHT_UNITS/2; j < RECT_HEIGHT_UNITS/2; j++) {
+				
+				
+				if (cam.frustum.pointInFrustum(new Vector3(i, j, 0)))
+				{
+					spriteBatch.draw(squareTextures[colorIndexArray[i_color][j_color]], i, j, 1, 1);
+					test++;
+				}
+				j_color++;
+			}
+			i_color++;
+		}
+		Gdx.app.log("Total sprite drawed", String.valueOf(test));
+		spriteBatch.end();	
+	}
+	
+	
 	@Override
 	public void resize(int width, int height) {
 		// TODO Auto-generated method stub
@@ -159,16 +348,21 @@ public class gameScreen extends abstractScreen {
 	@Override
 	public void dispose() {
 		// TODO Auto-generated method stub
-		
+		spriteBatch.dispose();
+		spriteCache.dispose();
+		debugRenderer.dispose();		
 	}
 	
     private void handleInput() {
         if(Gdx.input.isKeyPressed(Input.Keys.A)) {
         	if(cam.zoom < 1000)
-                cam.zoom += 0.5;        }
+                cam.zoom += 0.5;        
+        	Gdx.app.log("ZOOM", String.valueOf(cam.zoom));
+        }
         if(Gdx.input.isKeyPressed(Input.Keys.Q)) {
         	if(cam.zoom > 0.5)
                 cam.zoom -= 0.5;
+        	Gdx.app.log("ZOOM", String.valueOf(cam.zoom));
         }
         if(Gdx.input.isKeyPressed(Input.Keys.LEFT)) {
                 if (cam.position.x > (-RECT_WIDTH_UNITS / 2) - 5)
